@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Читалка</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="pdf.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background-color: #121212;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    #loader {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      font-size: 16px;
+      color: #aaaaaa;
+    }
+    #reader-container {
+      width: 100%;
+      max-width: 800px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    canvas {
+      display: block;
+      width: 100% !important;
+      height: auto !important;
+      margin: 0;
+      padding: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="loader">Загрузка главы...</div>
+  <div id="reader-container"></div>
+
+  <script>
+    if (window.Telegram && window.Telegram.WebApp) {
+      const tg = window.Telegram.WebApp;
+      tg.ready();
+      tg.expand();
+    }
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const fileName = urlParams.get('file');
+    const pageTitle = urlParams.get('title');
+
+    if (pageTitle) {
+      document.title = pageTitle;
+    }
+
+    const container = document.getElementById('reader-container');
+    const loader = document.getElementById('loader');
+
+    if (!fileName) {
+      loader.innerText = 'Ошибка: не указан файл главы в ссылке.';
+    } else {
+      loadPDF(`chapters/${fileName}`);
+    }
+
+    async function loadPDF(url) {
+      try {
+        const loadingTask = pdfjsLib.getDocument(url);
+        const pdf = await loadingTask.promise;
+        loader.style.display = 'none';
+
+        const pixelRatio = Math.min(window.devicePixelRatio || 1, 2.5);
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const viewportBase = page.getViewport({ scale: 1 });
+          const targetWidth = Math.min(window.innerWidth, 800) * pixelRatio;
+          const scale = targetWidth / viewportBase.width;
+          const viewport = page.getViewport({ scale: scale });
+
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+
+          container.appendChild(canvas);
+
+          await page.render({
+            canvasContext: context,
+            viewport: viewport
+          }).promise;
+        }
+      } catch (error) {
+        console.error(error);
+        loader.innerText = 'Не удалось загрузить главу. Проверьте название файла.';
+      }
+    }
+  </script>
+</body>
+</html>
